@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # Base de datos en memoria para telemetría y logs
+  valkey:
+    image: valkey/valkey:7.2
+    container_name: valkey_db
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey_data:/data
+
+  # Servidor de visualización para los Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana_dashboard
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin  # Contraseña por defecto (puedes cambiarla)
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - valkey
+
+volumes:
+  valkey_data:
+  grafana_data:
