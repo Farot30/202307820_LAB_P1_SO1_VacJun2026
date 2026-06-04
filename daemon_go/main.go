@@ -3,26 +3,55 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 )
 
 func main() {
 	fmt.Println("=== Iniciando Daemon Gestor de Contenedores ===")
-
-	// 1. Definimos la ruta exacta del archivo que tu módulo en C está generando
-	// Usamos tu carnet exacto según lo que probamos en la Fase A
 	rutaProc := "/proc/continfo_pr1_so1_202307820"
 
-	// 2. Leemos el archivo completo de un solo golpe
-	// os.ReadFile nos devuelve los bytes del archivo y un error (si lo hubo)
 	datos, err := os.ReadFile(rutaProc)
 	if err != nil {
-		fmt.Printf("Error fatal: No se pudo leer el archivo del kernel. ¿Está cargado el módulo?\nDetalle: %v\n", err)
+		fmt.Printf("Error: No se pudo leer /proc: %v\n", err)
 		return
 	}
 
-	// 3. Si no hay error, convertimos los bytes a texto (string) y los imprimimos
-	fmt.Println("¡Lectura exitosa! Esto es lo que Go está viendo desde el Kernel:")
-	fmt.Println("--------------------------------------------------")
-	fmt.Println(string(datos))
-	fmt.Println("--------------------------------------------------")
+	lineas := strings.Split(string(datos), "\n")
+	var listaProcesos []Proceso
+
+	for _, linea := range lineas {
+		if strings.HasPrefix(linea, "PID:") {
+			var p Proceso
+			_, err := fmt.Sscanf(linea, "PID: %d | Nombre: %s | VSZ: %d | RSS: %d | Utime: %d | Stime: %d",
+				&p.PID, &p.Nombre, &p.VSZ, &p.RSS, &p.Utime, &p.Stime)
+
+			if err == nil {
+				listaProcesos = append(listaProcesos, p)
+			}
+		}
+	}
+
+	// --- ORDENAMIENTO POR RAM (RSS) ---
+	sort.Slice(listaProcesos, func(i, j int) bool {
+		return listaProcesos[i].RSS > listaProcesos[j].RSS
+	})
+
+	fmt.Println("\n--- TOP 5 PROCESOS POR USO DE RAM (RSS) ---")
+	for i := 0; i < 5 && i < len(listaProcesos); i++ {
+		fmt.Printf("%d. %s (PID: %d) - RSS: %d páginas\n", i+1, listaProcesos[i].Nombre, listaProcesos[i].PID, listaProcesos[i].RSS)
+	}
+
+	// --- ORDENAMIENTO POR CPU (Utime + Stime) ---
+	sort.Slice(listaProcesos, func(i, j int) bool {
+		cpuI := listaProcesos[i].Utime + listaProcesos[i].Stime
+		cpuJ := listaProcesos[j].Utime + listaProcesos[j].Stime
+		return cpuI > cpuJ
+	})
+
+	fmt.Println("\n--- TOP 5 PROCESOS POR USO DE CPU (Ticks) ---")
+	for i := 0; i < 5 && i < len(listaProcesos); i++ {
+		cpuTotal := listaProcesos[i].Utime + listaProcesos[i].Stime
+		fmt.Printf("%d. %s (PID: %d) - CPU Ticks: %d\n", i+1, listaProcesos[i].Nombre, listaProcesos[i].PID, cpuTotal)
+	}
 }
