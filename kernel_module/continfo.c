@@ -31,7 +31,7 @@ static int escribir_archivo(struct seq_file *m, void *v) {
     free_ram_mb = (i.freeram * i.mem_unit) / (1024 * 1024);
     used_ram_mb = total_ram_mb - free_ram_mb;
 
-    seq_printf(m, "¡Módulo de kernel de Farot cargado correctamente!\n");
+    seq_printf(m, "¡Módulo de kernel de Ottoniel cargado correctamente!\n");
     seq_printf(m, "Total de memoria RAM: %ld MB\n", total_ram_mb);
     seq_printf(m, "Memoria RAM libre: %ld MB\n", free_ram_mb);
     seq_printf(m, "Memoria RAM en uso: %ld MB\n\n", used_ram_mb);

@@ -1,5 +1,4 @@
 #!/bin/bash
-# Despliegue aleatorio de 5 contenedores para el Proyecto 1 [cite: 9, 59]
 
 echo "Iniciando despliegue de contenedores de prueba..."
 
