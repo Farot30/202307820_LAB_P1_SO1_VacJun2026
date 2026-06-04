@@ -3,13 +3,21 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 )
 
 func main() {
 	fmt.Println("=== Iniciando Daemon Gestor de Contenedores ===")
 	rutaProc := "/proc/continfo_pr1_so1_202307820"
+
+	fmt.Println("Buscando contenedores activos...")
+	contenedores := obtenerContenedores()
+	for _, c := range contenedores {
+		fmt.Printf("Contenedor ID: %s | Imagen: %s | PID: %d\n", c.ID, c.Imagen, c.PID)
+	}
 
 	datos, err := os.ReadFile(rutaProc)
 	if err != nil {
@@ -54,4 +62,53 @@ func main() {
 		cpuTotal := listaProcesos[i].Utime + listaProcesos[i].Stime
 		fmt.Printf("%d. %s (PID: %d) - CPU Ticks: %d\n", i+1, listaProcesos[i].Nombre, listaProcesos[i].PID, cpuTotal)
 	}
+}
+
+func obtenerContenedores() []ContenedorDocker {
+	var listaContenedores []ContenedorDocker
+
+	// Ejecutamos 'docker ps -q' para obtener solo los IDs de los contenedores
+	cmd := exec.Command("docker", "ps", "-q")
+	salida, err := cmd.Output()
+	if err != nil {
+		fmt.Println("Error al ejecutar docker ps:", err)
+		return listaContenedores
+	}
+
+	ids := strings.Split(strings.TrimSpace(string(salida)), "\n")
+	if len(ids) == 0 || ids[0] == "" {
+		return listaContenedores // No hay contenedores corriendo
+	}
+
+	// Por cada ID, extraemos su PID y su Imagen usando 'docker inspect'
+	for _, id := range ids {
+		// Formato: {{.State.Pid}}|{{.Config.Image}}
+		cmdInspect := exec.Command("docker", "inspect", "-f", "{{.State.Pid}}|{{.Config.Image}}", id)
+		salidaInspect, errInspect := cmdInspect.Output()
+		if errInspect != nil {
+			continue
+		}
+
+		datos := strings.Split(strings.TrimSpace(string(salidaInspect)), "|")
+		if len(datos) == 2 {
+			pid, _ := strconv.Atoi(datos[0])
+			imagen := datos[1]
+			tipo := "Desconocido"
+
+			// Clasificamos según la tabla del enunciado
+			if strings.Contains(imagen, "go-client") || strings.Contains(imagen, "alpine") {
+				// Alpine puede ser ambos, pero el go-client es de alto consumo de RAM
+				tipo = "Monitoreado"
+			}
+
+			listaContenedores = append(listaContenedores, ContenedorDocker{
+				ID:     id,
+				Imagen: imagen,
+				PID:    pid,
+				Tipo:   tipo,
+			})
+		}
+	}
+
+	return listaContenedores
 }

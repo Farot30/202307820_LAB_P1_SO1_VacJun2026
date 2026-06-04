@@ -8,3 +8,11 @@ type Proceso struct {
 	Utime  int64
 	Stime  int64
 }
+
+// Estructura para almacenar los datos de un contenedor vivo
+type ContenedorDocker struct {
+	ID     string
+	Imagen string
+	PID    int
+	Tipo   string
+}
