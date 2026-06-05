@@ -14,7 +14,9 @@ func main() {
 
 	rutaScript := "/home/ubuntu/Documentos/202307820_LAB_P1_SO1_VacJun2026/docker/generador.sh"
 
-	// Configurar el apagado seguro (Capturar Ctrl+C)
+	// 1. Conectar a la base de datos al arrancar
+	conectarValkey()
+
 	canalSalida := make(chan os.Signal, 1)
 	signal.Notify(canalSalida, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -25,10 +27,8 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// Instalar el Cronjob al iniciar
 	instalarCronjob(rutaScript)
 
-	// Loop Principal
 	for {
 		fmt.Println("\n==================================================")
 		fmt.Println("Realizando escaneo del sistema...")
@@ -43,9 +43,21 @@ func main() {
 		}
 
 		var monitoreados []ContenedorMonitoreado
+		var ramTotal, ramLibre, ramUso string // Variables para guardar la RAM de la cabecera
+
 		lineas := strings.Split(string(datos), "\n")
 
 		for _, linea := range lineas {
+			// Capturamos la RAM general del sistema directamente del texto
+			if strings.HasPrefix(linea, "Total de memoria RAM:") {
+				fmt.Sscanf(linea, "Total de memoria RAM: %s MB", &ramTotal)
+			} else if strings.HasPrefix(linea, "Memoria RAM libre:") {
+				fmt.Sscanf(linea, "Memoria RAM libre: %s MB", &ramLibre)
+			} else if strings.HasPrefix(linea, "Memoria RAM en uso:") {
+				fmt.Sscanf(linea, "Memoria RAM en uso: %s MB", &ramUso)
+			}
+
+			// Capturamos los procesos
 			if strings.HasPrefix(linea, "PID:") {
 				var p Proceso
 				_, err := fmt.Sscanf(linea, "PID: %d | Nombre: %s | VSZ: %d | RSS: %d | Utime: %d | Stime: %d",
@@ -63,6 +75,10 @@ func main() {
 				}
 			}
 		}
+
+		// 2. Enviamos las métricas recolectadas a Valkey
+		guardarRAMSistemaValkey(ramTotal, ramLibre, ramUso)
+		guardarTopContenedoresValkey(monitoreados)
 
 		fmt.Println("--- ESTADO ACTUAL DE CONTENEDORES ---")
 		for _, m := range monitoreados {

@@ -85,5 +85,6 @@ func matarContenedor(c ContenedorMonitoreado) {
 		fmt.Printf("    [Error] No se pudo eliminar %s: %v\n", c.IDContenedor[:8], err)
 	} else {
 		fmt.Printf("    [Éxito] Contenedor %s eliminado correctamente.\n", c.IDContenedor[:8])
+		registrarEliminacionValkey()
 	}
 }
