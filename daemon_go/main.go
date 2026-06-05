@@ -4,29 +4,69 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"sort"
 	"strconv"
 	"strings"
 )
 
-func main() {
-	fmt.Println("=== Iniciando Daemon Gestor de Contenedores ===")
-	rutaProc := "/proc/continfo_pr1_so1_202307820"
-
-	fmt.Println("Buscando contenedores activos...")
-	contenedores := obtenerContenedores()
-	for _, c := range contenedores {
-		fmt.Printf("Contenedor ID: %s | Imagen: %s | PID: %d\n", c.ID, c.Imagen, c.PID)
+func obtenerContenedores() []ContenedorDocker {
+	var lista []ContenedorDocker
+	cmd := exec.Command("docker", "ps", "-q")
+	salida, err := cmd.Output()
+	if err != nil {
+		return lista
 	}
 
+	ids := strings.Split(strings.TrimSpace(string(salida)), "\n")
+	if len(ids) == 0 || ids[0] == "" {
+		return lista
+	}
+
+	for _, id := range ids {
+		// Extraemos PID, Imagen y Comando
+		cmdInspect := exec.Command("docker", "inspect", "-f", "{{.State.Pid}}|{{.Config.Image}}|{{join .Config.Cmd \" \"}}", id)
+		salidaInspect, errInspect := cmdInspect.Output()
+		if errInspect != nil {
+			continue
+		}
+
+		// CORRECCIÓN: Usamos SplitN limitado a 3 partes para que los '|' internos del comando no rompan el parseo
+		datos := strings.SplitN(strings.TrimSpace(string(salidaInspect)), "|", 3)
+		if len(datos) == 3 {
+			pid, _ := strconv.Atoi(datos[0])
+			imagen := datos[1]
+			comando := datos[2]
+
+			// Clasificación estricta
+			tipo := "Desconocido"
+			if strings.Contains(imagen, "go-client") || strings.Contains(comando, "bc") {
+				tipo = "Alto Consumo"
+			} else if strings.Contains(comando, "sleep") {
+				tipo = "Bajo Consumo"
+			}
+
+			lista = append(lista, ContenedorDocker{ID: id, Imagen: imagen, PID: pid, Tipo: tipo})
+		}
+	}
+	return lista
+}
+
+func main() {
+	fmt.Println("=== Iniciando Daemon Gestor de Contenedores ===")
+
+	// 1. Obtenemos los contenedores de Docker
+	contenedoresActivos := obtenerContenedores()
+
+	// 2. Leemos el archivo del Kernel
+	rutaProc := "/proc/continfo_pr1_so1_202307820"
 	datos, err := os.ReadFile(rutaProc)
 	if err != nil {
-		fmt.Printf("Error: No se pudo leer /proc: %v\n", err)
+		fmt.Printf("Error al leer /proc: %v\n", err)
 		return
 	}
 
+	// 3. EL CRUCE DE DATOS (El Match)
+	var monitoreados []ContenedorMonitoreado
 	lineas := strings.Split(string(datos), "\n")
-	var listaProcesos []Proceso
 
 	for _, linea := range lineas {
 		if strings.HasPrefix(linea, "PID:") {
@@ -35,80 +75,30 @@ func main() {
 				&p.PID, &p.Nombre, &p.VSZ, &p.RSS, &p.Utime, &p.Stime)
 
 			if err == nil {
-				listaProcesos = append(listaProcesos, p)
+				// Buscamos si este PID del Kernel pertenece a un contenedor
+				for _, cont := range contenedoresActivos {
+					if p.PID == cont.PID {
+						monitoreados = append(monitoreados, ContenedorMonitoreado{
+							IDContenedor: cont.ID,
+							Imagen:       cont.Imagen,
+							Tipo:         cont.Tipo,
+							PID:          p.PID,
+							Nombre:       p.Nombre,
+							VSZ:          p.VSZ,
+							RSS:          p.RSS,
+							Utime:        p.Utime,
+							Stime:        p.Stime,
+						})
+					}
+				}
 			}
 		}
 	}
 
-	// --- ORDENAMIENTO POR RAM (RSS) ---
-	sort.Slice(listaProcesos, func(i, j int) bool {
-		return listaProcesos[i].RSS > listaProcesos[j].RSS
-	})
-
-	fmt.Println("\n--- TOP 5 PROCESOS POR USO DE RAM (RSS) ---")
-	for i := 0; i < 5 && i < len(listaProcesos); i++ {
-		fmt.Printf("%d. %s (PID: %d) - RSS: %d páginas\n", i+1, listaProcesos[i].Nombre, listaProcesos[i].PID, listaProcesos[i].RSS)
+	// 4. Imprimimos el resultado final limpio
+	fmt.Println("\n--- CONTENEDORES MONITOREADOS DESDE EL KERNEL ---")
+	for _, m := range monitoreados {
+		fmt.Printf("ID: %s | Tipo: %-15s | PID: %d | RSS: %d pág | CPU Ticks: %d\n",
+			m.IDContenedor[:8], m.Tipo, m.PID, m.RSS, (m.Utime + m.Stime))
 	}
-
-	// --- ORDENAMIENTO POR CPU (Utime + Stime) ---
-	sort.Slice(listaProcesos, func(i, j int) bool {
-		cpuI := listaProcesos[i].Utime + listaProcesos[i].Stime
-		cpuJ := listaProcesos[j].Utime + listaProcesos[j].Stime
-		return cpuI > cpuJ
-	})
-
-	fmt.Println("\n--- TOP 5 PROCESOS POR USO DE CPU (Ticks) ---")
-	for i := 0; i < 5 && i < len(listaProcesos); i++ {
-		cpuTotal := listaProcesos[i].Utime + listaProcesos[i].Stime
-		fmt.Printf("%d. %s (PID: %d) - CPU Ticks: %d\n", i+1, listaProcesos[i].Nombre, listaProcesos[i].PID, cpuTotal)
-	}
-}
-
-func obtenerContenedores() []ContenedorDocker {
-	var listaContenedores []ContenedorDocker
-
-	// Ejecutamos 'docker ps -q' para obtener solo los IDs de los contenedores
-	cmd := exec.Command("docker", "ps", "-q")
-	salida, err := cmd.Output()
-	if err != nil {
-		fmt.Println("Error al ejecutar docker ps:", err)
-		return listaContenedores
-	}
-
-	ids := strings.Split(strings.TrimSpace(string(salida)), "\n")
-	if len(ids) == 0 || ids[0] == "" {
-		return listaContenedores // No hay contenedores corriendo
-	}
-
-	// Por cada ID, extraemos su PID y su Imagen usando 'docker inspect'
-	for _, id := range ids {
-		// Formato: {{.State.Pid}}|{{.Config.Image}}
-		cmdInspect := exec.Command("docker", "inspect", "-f", "{{.State.Pid}}|{{.Config.Image}}", id)
-		salidaInspect, errInspect := cmdInspect.Output()
-		if errInspect != nil {
-			continue
-		}
-
-		datos := strings.Split(strings.TrimSpace(string(salidaInspect)), "|")
-		if len(datos) == 2 {
-			pid, _ := strconv.Atoi(datos[0])
-			imagen := datos[1]
-			tipo := "Desconocido"
-
-			// Clasificamos según la tabla del enunciado
-			if strings.Contains(imagen, "go-client") || strings.Contains(imagen, "alpine") {
-				// Alpine puede ser ambos, pero el go-client es de alto consumo de RAM
-				tipo = "Monitoreado"
-			}
-
-			listaContenedores = append(listaContenedores, ContenedorDocker{
-				ID:     id,
-				Imagen: imagen,
-				PID:    pid,
-				Tipo:   tipo,
-			})
-		}
-	}
-
-	return listaContenedores
 }

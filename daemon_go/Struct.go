@@ -16,3 +16,15 @@ type ContenedorDocker struct {
 	PID    int
 	Tipo   string
 }
+
+type ContenedorMonitoreado struct {
+	IDContenedor string
+	Imagen       string
+	Tipo         string // "Alto Consumo" o "Bajo Consumo"
+	PID          int
+	Nombre       string
+	VSZ          int
+	RSS          int
+	Utime        int64
+	Stime        int64
+}
