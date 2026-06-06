@@ -34,8 +34,6 @@ func calcularPorcentajeCPU(pid int, utime int64, stime int64) float64 {
 	return porcentaje
 }
 
-// ¡IMPORTANTE!
-// Llama a esta función al FINAL de tu ciclo (después de leer todos los procesos)
 func actualizarTiempoCiclo() {
 	tiempoAnterior = time.Now()
 }

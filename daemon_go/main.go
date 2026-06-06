@@ -96,7 +96,7 @@ func main() {
 				if err == nil {
 					for _, cont := range contenedoresActivos {
 						if p.PID == cont.PID {
-							// MEJORA: Si es un contenedor de infraestructura (Valkey/Grafana), lo ignoramos
+
 							if cont.Tipo == "Desconocido" {
 								continue
 							}
@@ -179,7 +179,6 @@ func inicializarEntorno(rutaDocker string, rutaKernel string, rutaScript string)
 		fmt.Println("   [Éxito] Sonda de kernel inyectada en el sistema.")
 	}
 
-	// 4. MEJORA CRÍTICA: Forzar carga inicial de contenedores inmediatamente en el Segundo 0
 	fmt.Println("[INFO] Lanzando carga inicial de contenedores de prueba...")
 	cmdCargaInicial := exec.Command("bash", rutaScript)
 	if err := cmdCargaInicial.Run(); err != nil {
