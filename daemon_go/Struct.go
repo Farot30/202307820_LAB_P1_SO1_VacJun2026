@@ -18,13 +18,14 @@ type ContenedorDocker struct {
 }
 
 type ContenedorMonitoreado struct {
-	IDContenedor string
-	Imagen       string
-	Tipo         string // "Alto Consumo" o "Bajo Consumo"
-	PID          int
-	Nombre       string
-	VSZ          int
-	RSS          int
-	Utime        int64
-	Stime        int64
+	IDContenedor string  `json:"id"`
+	Imagen       string  `json:"imagen"`
+	Tipo         string  `json:"tipo"`
+	PID          int     `json:"pid"`
+	Nombre       string  `json:"nombre"`
+	VSZ_MB       float64 `json:"vsz_mb"`
+	RSS_MB       float64 `json:"rss_mb"`
+	CPU_Percent  float64 `json:"cpu"`
+	Utime        int64   `json:"-"`
+	Stime        int64   `json:"-"`
 }

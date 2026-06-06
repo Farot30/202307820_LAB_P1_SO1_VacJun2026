@@ -59,26 +59,44 @@ func gestionarContenedores(monitoreados []ContenedorMonitoreado) {
 		}
 	}
 
-	sort.Slice(altos, func(i, j int) bool { return altos[i].RSS > altos[j].RSS })
-	sort.Slice(bajos, func(i, j int) bool { return bajos[i].RSS > bajos[j].RSS })
+	// 1. ORDENAMIENTO CORRECTO (De MENOR a MAYOR consumo)
+	// Los índices 0 y 1 serán los más ligeros (los que queremos conservar)
+	sort.Slice(altos, func(i, j int) bool { return altos[i].RSS_MB < altos[j].RSS_MB })
+	sort.Slice(bajos, func(i, j int) bool { return bajos[i].RSS_MB < bajos[j].RSS_MB })
 
+	// --- GESTIÓN DE ALTO CONSUMO (Debe ser EXACTAMENTE 2) ---
 	if len(altos) > 2 {
-		fmt.Printf("\n[ALERTA] Exceso de Alto Consumo detectado: %d/2. Eliminando excedentes...\n", len(altos))
+		fmt.Printf("\n[ALERTA] Exceso de Alto Consumo: %d/2. Eliminando los más pesados...\n", len(altos))
 		for i := 2; i < len(altos); i++ {
 			matarContenedor(altos[i])
 		}
+	} else if len(altos) < 2 {
+		faltantes := 2 - len(altos)
+		fmt.Printf("\n[INFO] Faltan contenedores de Alto Consumo: %d. Levantando nuevos...\n", faltantes)
+		for i := 0; i < faltantes; i++ {
+			// Levantar contenedor de alto consumo (go-client o el de CPU)
+			exec.Command("docker", "run", "-d", "roldyoran/go-client").Run()
+		}
 	}
 
+	// --- GESTIÓN DE BAJO CONSUMO (Debe ser EXACTAMENTE 3) ---
 	if len(bajos) > 3 {
-		fmt.Printf("\n[ALERTA] Exceso de Bajo Consumo detectado: %d/3. Eliminando excedentes...\n", len(bajos))
+		fmt.Printf("\n[ALERTA] Exceso de Bajo Consumo: %d/3. Eliminando los más pesados...\n", len(bajos))
 		for i := 3; i < len(bajos); i++ {
 			matarContenedor(bajos[i])
+		}
+	} else if len(bajos) < 3 {
+		faltantes := 3 - len(bajos)
+		fmt.Printf("\n[INFO] Faltan contenedores de Bajo Consumo: %d. Levantando nuevos...\n", faltantes)
+		for i := 0; i < faltantes; i++ {
+			// Levantar contenedor de bajo consumo
+			exec.Command("docker", "run", "-d", "alpine", "sleep", "240").Run()
 		}
 	}
 }
 
 func matarContenedor(c ContenedorMonitoreado) {
-	fmt.Printf(" -> Matando contenedor %s (PID: %d) - Tipo: %s - RAM: %d pág\n", c.IDContenedor[:8], c.PID, c.Tipo, c.RSS)
+	fmt.Printf(" -> Matando contenedor %s (PID: %d) - Tipo: %s - RAM: %.2f MB\n", c.IDContenedor[:8], c.PID, c.Tipo, c.RSS_MB)
 	cmd := exec.Command("docker", "rm", "-f", c.IDContenedor)
 	err := cmd.Run()
 	if err != nil {
@@ -86,5 +104,33 @@ func matarContenedor(c ContenedorMonitoreado) {
 	} else {
 		fmt.Printf("    [Éxito] Contenedor %s eliminado correctamente.\n", c.IDContenedor[:8])
 		registrarEliminacionValkey()
+	}
+}
+
+// limpiarTodoAlSalir detiene y elimina tanto los contenedores de prueba como Valkey y Grafana
+func limpiarTodoAlSalir(rutaDocker string) {
+	fmt.Println("[INFO] Buscando contenedores de prueba activos para eliminar...")
+
+	// Reutilizamos tu función para listar los contenedores que están corriendo
+	contenedores := obtenerContenedores()
+
+	if len(contenedores) == 0 {
+		fmt.Println("   [INFO] No se encontraron contenedores de prueba activos.")
+	} else {
+		for _, c := range contenedores {
+			fmt.Printf("   -> Eliminando contenedor de prueba huérfano: %s (%s) | PID: %d\n", c.ID[:8], c.Tipo, c.PID)
+			// 'rm -f' detiene y elimina el contenedor inmediatamente
+			exec.Command("docker", "rm", "-f", c.ID).Run()
+		}
+		fmt.Println("   [Éxito] Todos los contenedores de prueba fueron removidos.")
+	}
+
+	// Apagamos Valkey y Grafana de forma segura para no dejar procesos Docker vivos
+	fmt.Println("[INFO] Apagando servicios base (Valkey y Grafana) con Docker Compose...")
+	cmdDockerDown := exec.Command("bash", "-c", fmt.Sprintf("cd %s && docker compose down", rutaDocker))
+	if err := cmdDockerDown.Run(); err != nil {
+		fmt.Printf("   [Advertencia] No se pudo ejecutar docker compose down: %v\n", err)
+	} else {
+		fmt.Println("   [Éxito] Infraestructura de Docker Compose apagada limpiamente.")
 	}
 }
