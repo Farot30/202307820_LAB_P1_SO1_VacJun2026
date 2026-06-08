@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -33,12 +35,34 @@ func registrarEliminacionValkey() {
 	}
 }
 
-// 3. Guarda las métricas generales de RAM (enviadas por tu módulo en C)
+// 3. Guarda las métricas generales de RAM actuales e históricas para la gráfica de tiempo
 func guardarRAMSistemaValkey(total string, libre string, enUso string) {
 	if valkeyClient != nil {
+		// 1. Guardamos los strings actuales (lo que ya tenías)
 		valkeyClient.Set(ctx, "sistema:ram:total", total, 0)
 		valkeyClient.Set(ctx, "sistema:ram:libre", libre, 0)
 		valkeyClient.Set(ctx, "sistema:ram:en_uso", enUso, 0)
+
+		// 2. NUEVO: Limpiamos el string 'enUso' por si trae espacios o unidades ("MB" / "KB")
+		limpio := strings.TrimSpace(enUso)
+		limpio = strings.ReplaceAll(limpio, " MB", "")
+		limpio = strings.ReplaceAll(limpio, " KB", "")
+
+		// Convertimos el string a un número flotante puro
+		ramNumerica, err := strconv.ParseFloat(limpio, 64)
+		if err == nil {
+			// Guardamos en el Stream nativo de Valkey.
+			// Como borramos la llave en el Paso 1, aquí se creará limpia y con el tipo correcto.
+			valkeyClient.XAdd(ctx, &redis.XAddArgs{
+				Stream: "sistema:historico:ram",
+				MaxLen: 100, // Conserva solo los últimos 100 registros para cuidar la memoria
+				Approx: true,
+				ID:     "*", // Valkey genera automáticamente el ID usando el timestamp actual
+				Values: map[string]interface{}{
+					"en_uso": ramNumerica,
+				},
+			})
+		}
 	}
 }
 
