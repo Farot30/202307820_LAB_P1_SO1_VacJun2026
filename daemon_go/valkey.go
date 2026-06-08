@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
@@ -43,13 +42,29 @@ func guardarRAMSistemaValkey(total string, libre string, enUso string) {
 	}
 }
 
-// 4. Guarda el Top de contenedores en formato JSON para Grafana
-func guardarTopContenedoresValkey(monitoreados []ContenedorMonitoreado) {
+// Actualiza el ranking histórico de RAM (Guarda el pico más alto del contenedor)
+func registrarConsumoRAMValkey(id string, pid int, ramMB float64) {
 	if valkeyClient != nil {
-		// En Grafana será más fácil leer un JSON con la lista completa
-		jsonData, err := json.Marshal(monitoreados)
-		if err == nil {
-			valkeyClient.Set(ctx, "contenedores:monitoreados", string(jsonData), 0)
-		}
+		// Formateamos el miembro para que muestre PID e ID como pide tu enunciado
+		miembro := fmt.Sprintf("PID: %d | ID: %s", pid, id[:8])
+
+		// Con NX no actualiza si ya existe, pero queremos guardar el PICO MÁS ALTO histórico.
+		// Podemos usar ZAdd y Valkey se encargará de ordenarlo.
+		valkeyClient.ZAdd(ctx, "sistema:ranking:ram", redis.Z{
+			Score:  ramMB,
+			Member: miembro,
+		})
+	}
+}
+
+// Actualiza el ranking histórico de CPU (Guarda el pico más alto del contenedor)
+func registrarConsumoCPUValkey(id string, pid int, cpuPercent float64) {
+	if valkeyClient != nil {
+		miembro := fmt.Sprintf("PID: %d | ID: %s", pid, id[:8])
+
+		valkeyClient.ZAdd(ctx, "sistema:ranking:cpu", redis.Z{
+			Score:  cpuPercent,
+			Member: miembro,
+		})
 	}
 }

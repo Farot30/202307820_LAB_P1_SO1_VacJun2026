@@ -126,7 +126,10 @@ func main() {
 
 		// Persistir métricas filtradas en la Base de Datos
 		guardarRAMSistemaValkey(ramTotal, ramLibre, ramUso)
-		guardarTopContenedoresValkey(monitoreados)
+		for _, m := range monitoreados {
+			registrarConsumoRAMValkey(m.IDContenedor, m.PID, m.RSS_MB)
+			registrarConsumoCPUValkey(m.IDContenedor, m.PID, m.CPU_Percent)
+		}
 
 		// Imprimir estado limpio en Consola
 		fmt.Println("--- ESTADO ACTUAL DE CONTENEDORES ---")
