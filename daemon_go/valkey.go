@@ -92,3 +92,9 @@ func registrarConsumoCPUValkey(id string, pid int, cpuPercent float64) {
 		})
 	}
 }
+
+func limpiarRankingsValkey() {
+	if valkeyClient != nil {
+		valkeyClient.Del(ctx, "sistema:ranking:ram", "sistema:ranking:cpu")
+	}
+}

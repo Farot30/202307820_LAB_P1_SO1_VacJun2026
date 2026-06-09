@@ -126,6 +126,9 @@ func main() {
 
 		// Persistir métricas filtradas en la Base de Datos
 		guardarRAMSistemaValkey(ramTotal, ramLibre, ramUso)
+
+		limpiarRankingsValkey()
+
 		for _, m := range monitoreados {
 			registrarConsumoRAMValkey(m.IDContenedor, m.PID, m.RSS_MB)
 			registrarConsumoCPUValkey(m.IDContenedor, m.PID, m.CPU_Percent)
