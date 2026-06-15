@@ -15,9 +15,9 @@ var valkeyClient *redis.Client
 // 1. Inicia la conexión con Valkey
 func conectarValkey() {
 	valkeyClient = redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379", // El puerto que vimos expuesto en tu docker ps
-		Password: "",               // Sin contraseña por defecto
-		DB:       0,                // Base de datos por defecto
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
 	})
 
 	_, err := valkeyClient.Ping(ctx).Result()
